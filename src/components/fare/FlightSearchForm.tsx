@@ -3,6 +3,7 @@ import { format, addDays } from 'date-fns';
 import { ArrowsRightLeftIcon, CalendarDaysIcon, UsersIcon } from '@heroicons/react/24/outline';
 import { AirportSearch } from '../airport/AirportSearch';
 import { NearbyAirportsButton } from '../airport/NearbyAirportsButton';
+import { DailyFaresCalendarModal } from './DailyFaresCalendarModal';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { CURRENCIES, PASSENGER_COUNTS, DATE_FORMAT } from '../../utils/constants';
@@ -17,7 +18,7 @@ interface FlightSearchFormProps {
 }
 
 export function FlightSearchForm({ value, onChange, onSubmit, loading }: FlightSearchFormProps) {
-  const [focusedField, setFocusedField] = useState<string | null>(null);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
 
   const handleSwapAirports = () => {
     onChange({
@@ -44,22 +45,29 @@ export function FlightSearchForm({ value, onChange, onSubmit, loading }: FlightS
     onChange(newValue);
   };
 
-  const handleTripTypeChange = (tripType: 'one-way' | 'round-trip') => {
+  const handleTripTypeChange = (tripType: 'one-way' | 'round-trip' | 'daily-fares') => {
     onChange({
       ...value,
       tripType,
       returnDate: tripType === 'one-way' ? null : value.returnDate,
+      // Initialize date range for daily fares
+      startDate: tripType === 'daily-fares' ? value.startDate : null,
+      endDate: tripType === 'daily-fares' ? value.endDate : null,
     });
   };
 
   const isFormValid = () => {
-    return !!(
+    const baseValid = !!(
       value.origin &&
       value.destination &&
-      value.origin.code !== value.destination.code &&
-      value.departureDate &&
-      (value.tripType === 'one-way' || value.returnDate)
+      value.origin.code !== value.destination.code
     );
+
+    if (value.tripType === 'daily-fares') {
+      return baseValid && value.startDate && value.endDate;
+    }
+
+    return baseValid && value.departureDate && (value.tripType === 'one-way' || value.returnDate);
   };
 
   const today = new Date();
@@ -74,7 +82,7 @@ export function FlightSearchForm({ value, onChange, onSubmit, loading }: FlightS
           type="button"
           onClick={() => handleTripTypeChange('one-way')}
           className={cn(
-            "flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors",
+            "flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors",
             value.tripType === 'one-way'
               ? 'bg-white text-gray-900 shadow-sm'
               : 'text-gray-500 hover:text-gray-700'
@@ -86,13 +94,25 @@ export function FlightSearchForm({ value, onChange, onSubmit, loading }: FlightS
           type="button"
           onClick={() => handleTripTypeChange('round-trip')}
           className={cn(
-            "flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors",
+            "flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors",
             value.tripType === 'round-trip'
               ? 'bg-white text-gray-900 shadow-sm'
               : 'text-gray-500 hover:text-gray-700'
           )}
         >
           Round trip
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTripTypeChange('daily-fares')}
+          className={cn(
+            "flex-1 py-2 px-3 text-sm font-medium rounded-md transition-colors",
+            value.tripType === 'daily-fares'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          )}
+        >
+          Daily Fares
         </button>
         </div>
         
@@ -137,42 +157,22 @@ export function FlightSearchForm({ value, onChange, onSubmit, loading }: FlightS
       </div>
 
       {/* Date Selection */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Departure
-          </label>
-          <div className="relative">
-            <Input
-              type="date"
-              value={value.departureDate ? format(value.departureDate, DATE_FORMAT) : ''}
-              onChange={(e) => {
-                const date = e.target.value ? new Date(e.target.value) : null;
-                handleFieldChange('departureDate', date);
-              }}
-              min={format(today, DATE_FORMAT)}
-              className="pl-10"
-            />
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <CalendarDaysIcon className="h-5 w-5 text-gray-400" />
-            </div>
-          </div>
-        </div>
-
-        {value.tripType === 'round-trip' && (
+      {value.tripType === 'daily-fares' ? (
+        // Daily Fares: Date Range Selection
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Return
+              Start Date
             </label>
             <div className="relative">
               <Input
                 type="date"
-                value={value.returnDate ? format(value.returnDate, DATE_FORMAT) : ''}
+                value={value.startDate ? format(value.startDate, DATE_FORMAT) : ''}
                 onChange={(e) => {
                   const date = e.target.value ? new Date(e.target.value) : null;
-                  handleFieldChange('returnDate', date);
+                  handleFieldChange('startDate', date);
                 }}
-                min={value.departureDate ? format(value.departureDate, DATE_FORMAT) : format(tomorrow, DATE_FORMAT)}
+                min={format(today, DATE_FORMAT)}
                 className="pl-10"
               />
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -180,8 +180,77 @@ export function FlightSearchForm({ value, onChange, onSubmit, loading }: FlightS
               </div>
             </div>
           </div>
-        )}
-      </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              End Date
+            </label>
+            <div className="relative">
+              <Input
+                type="date"
+                value={value.endDate ? format(value.endDate, DATE_FORMAT) : ''}
+                onChange={(e) => {
+                  const date = e.target.value ? new Date(e.target.value) : null;
+                  handleFieldChange('endDate', date);
+                }}
+                min={value.startDate ? format(value.startDate, DATE_FORMAT) : format(tomorrow, DATE_FORMAT)}
+                className="pl-10"
+              />
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <CalendarDaysIcon className="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        // One-way and Round-trip: Single/Return Date Selection
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Departure
+            </label>
+            <div className="relative">
+              <Input
+                type="date"
+                value={value.departureDate ? format(value.departureDate, DATE_FORMAT) : ''}
+                onChange={(e) => {
+                  const date = e.target.value ? new Date(e.target.value) : null;
+                  handleFieldChange('departureDate', date);
+                }}
+                min={format(today, DATE_FORMAT)}
+                className="pl-10"
+              />
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <CalendarDaysIcon className="h-5 w-5 text-gray-400" />
+              </div>
+            </div>
+          </div>
+
+          {value.tripType === 'round-trip' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Return
+              </label>
+              <div className="relative">
+                <Input
+                  type="date"
+                  value={value.returnDate ? format(value.returnDate, DATE_FORMAT) : ''}
+                  onChange={(e) => {
+                    const date = e.target.value ? new Date(e.target.value) : null;
+                    handleFieldChange('returnDate', date);
+                  }}
+                  min={value.departureDate ? format(value.departureDate, DATE_FORMAT) : format(tomorrow, DATE_FORMAT)}
+                  className="pl-10"
+                />
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <CalendarDaysIcon className="h-5 w-5 text-gray-400" />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
 
       {/* Passengers and Currency */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
@@ -237,18 +306,50 @@ export function FlightSearchForm({ value, onChange, onSubmit, loading }: FlightS
         </div>
       </div>
 
-      {/* Search Button */}
+      {/* Action Button */}
       <div className="pt-4">
-        <Button
-          onClick={onSubmit}
-          disabled={!isFormValid()}
-          loading={loading}
-          size="lg"
-          className="w-full"
-        >
-          Search Flights
-        </Button>
+        {value.tripType === 'daily-fares' ? (
+          <Button
+            onClick={() => setShowCalendarModal(true)}
+            disabled={!isFormValid()}
+            size="lg"
+            className="w-full flex items-center justify-center space-x-2"
+          >
+            <CalendarDaysIcon className="w-5 h-5" />
+            <span>View Calendar</span>
+          </Button>
+        ) : (
+          <Button
+            onClick={onSubmit}
+            disabled={!isFormValid()}
+            loading={loading}
+            size="lg"
+            className="w-full"
+          >
+            Search Flights
+          </Button>
+        )}
       </div>
+
+      {/* Daily Fares Calendar Modal */}
+      <DailyFaresCalendarModal
+        isOpen={showCalendarModal}
+        onClose={() => setShowCalendarModal(false)}
+        origin={value.origin}
+        destination={value.destination}
+        selectedDate={value.tripType === 'daily-fares' ? value.startDate : value.departureDate}
+        startDate={value.tripType === 'daily-fares' ? value.startDate : undefined}
+        endDate={value.tripType === 'daily-fares' ? value.endDate : undefined}
+        currency={value.currency}
+        onDateSelect={(date) => {
+          if (value.tripType === 'daily-fares') {
+            // For daily fares, we don't need to select specific dates, just view the calendar
+            return;
+          } else {
+            handleFieldChange('departureDate', date);
+          }
+        }}
+      />
     </div>
   );
 }

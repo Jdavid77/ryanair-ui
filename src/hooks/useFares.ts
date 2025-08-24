@@ -45,6 +45,16 @@ export const useDailyFareRange = (
   params: DailyRangeParams,
   options?: Omit<UseQueryOptions<DailyFareRange[], Error>, 'queryKey' | 'queryFn'>
 ) => {
+  // Validate date range - allow up to 6 months for calendar view
+  const isValidDateRange = () => {
+    if (!params.startDate || !params.endDate) return false;
+    const start = new Date(params.startDate);
+    const end = new Date(params.endDate);
+    const diffInMonths = (end.getFullYear() - start.getFullYear()) * 12 + 
+                         (end.getMonth() - start.getMonth());
+    return start <= end && diffInMonths <= 6; // Allow up to 6 months
+  };
+
   return useQuery({
     queryKey: fareKeys.dailyRange(params),
     queryFn: () => api.fares.getDailyRange(params),
@@ -54,16 +64,19 @@ export const useDailyFareRange = (
       params.startDate && 
       params.endDate &&
       params.from !== params.to &&
-      new Date(params.startDate) <= new Date(params.endDate)
+      isValidDateRange()
     ),
-    staleTime: 1000 * 60 * 5, // 5 minutes
-    gcTime: 1000 * 60 * 15, // 15 minutes
+    staleTime: 1000 * 60 * 10, // 10 minutes (longer cache for calendar data)
+    gcTime: 1000 * 60 * 30, // 30 minutes (keep calendar data longer)
     retry: (failureCount, error) => {
       if (error.message.includes('400') || error.message.includes('404')) {
         return false;
       }
       return failureCount < 2;
     },
+    // Enable background refetch for better UX
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
     ...options,
   });
 };

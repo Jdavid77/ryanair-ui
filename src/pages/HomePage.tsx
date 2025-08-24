@@ -15,6 +15,8 @@ export function HomePage() {
     tripType: 'one-way',
     passengers: 1,
     currency: 'EUR',
+    startDate: null,
+    endDate: null,
   });
   const [hasSearched, setHasSearched] = useState(false);
 

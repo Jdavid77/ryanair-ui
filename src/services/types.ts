@@ -129,9 +129,12 @@ export interface CheapestFarePerDay {
 }
 
 export interface DailyFareRange {
-  date: string;
+  day: string;
+  arrivalDate: string;
+  departureDate: string;
   price: Price;
-  available: boolean;
+  soldOut: boolean;
+  unavailable: boolean;
 }
 
 export interface RoundTripFareOption {
@@ -198,9 +201,12 @@ export interface FlightSearchForm {
   destination: Airport | null;
   departureDate: Date | null;
   returnDate: Date | null;
-  tripType: 'one-way' | 'round-trip';
+  tripType: 'one-way' | 'round-trip' | 'daily-fares';
   passengers: number;
   currency: string;
+  // Additional fields for daily fares
+  startDate?: Date | null;
+  endDate?: Date | null;
 }
 
 export interface PriceCalendarDay {

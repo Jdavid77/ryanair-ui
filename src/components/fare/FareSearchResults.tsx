@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { format, addDays, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isBefore } from 'date-fns';
+import { format } from 'date-fns';
 import { Card, CardContent, CardHeader } from '../ui/Card';
 import { Button } from '../ui/Button';
-import { CalendarDaysIcon, ArrowRightIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
-import { useFareSearch, useDailyFareRange } from '../../hooks/useFares';
+import { CalendarDaysIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline';
+import { useFareSearch } from '../../hooks/useFares';
+import { DailyFaresCalendarModal } from './DailyFaresCalendarModal';
 import { formatPrice, formatDate, formatCurrency } from '../../utils/format';
-import type { FlightSearchForm, PriceCalendarDay } from '../../services/types';
-import { cn } from '../../utils/cn';
+import type { FlightSearchForm } from '../../services/types';
 
 interface FareSearchResultsProps {
   searchParams: FlightSearchForm;
@@ -14,7 +14,7 @@ interface FareSearchResultsProps {
 }
 
 export function FareSearchResults({ searchParams, onSearchParamsChange }: FareSearchResultsProps) {
-  const [showPriceCalendar, setShowPriceCalendar] = useState(false);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
   
   const { data: fareData, isLoading: fareLoading, error: fareError } = useFareSearch({
     from: searchParams.origin?.code,
@@ -23,21 +23,6 @@ export function FareSearchResults({ searchParams, onSearchParamsChange }: FareSe
     returnDate: searchParams.returnDate ? format(searchParams.returnDate, 'yyyy-MM-dd') : undefined,
     tripType: searchParams.tripType,
     currency: searchParams.currency,
-  });
-
-  // Price calendar data (show 2 months)
-  const startDate = searchParams.departureDate || new Date();
-  const calendarStart = startOfMonth(startDate);
-  const calendarEnd = endOfMonth(addDays(calendarStart, 60)); // 2 months
-  
-  const { data: priceCalendarData, isLoading: calendarLoading } = useDailyFareRange({
-    from: searchParams.origin?.code || '',
-    to: searchParams.destination?.code || '',
-    startDate: format(calendarStart, 'yyyy-MM-dd'),
-    endDate: format(calendarEnd, 'yyyy-MM-dd'),
-    currency: searchParams.currency,
-  }, {
-    enabled: showPriceCalendar && !!(searchParams.origin && searchParams.destination)
   });
 
   if (!searchParams.origin || !searchParams.destination) {
@@ -135,8 +120,8 @@ export function FareSearchResults({ searchParams, onSearchParamsChange }: FareSe
                               <div className="text-lg font-semibold text-gray-900">
                                 {format(new Date(option.departure.departureDate), 'HH:mm')}
                               </div>
-                              <div className="text-sm text-gray-600">{searchParams.origin.code}</div>
-                              <div className="text-xs text-gray-500">{searchParams.origin.name}</div>
+                              <div className="text-sm text-gray-600">{searchParams.origin?.code}</div>
+                              <div className="text-xs text-gray-500">{searchParams.origin?.name}</div>
                             </div>
                             
                             <div className="flex-1 px-4">
@@ -154,8 +139,8 @@ export function FareSearchResults({ searchParams, onSearchParamsChange }: FareSe
                               <div className="text-lg font-semibold text-gray-900">
                                 {format(new Date(option.departure.arrivalDate), 'HH:mm')}
                               </div>
-                              <div className="text-sm text-gray-600">{searchParams.destination.code}</div>
-                              <div className="text-xs text-gray-500">{searchParams.destination.name}</div>
+                              <div className="text-sm text-gray-600">{searchParams.destination?.code}</div>
+                              <div className="text-xs text-gray-500">{searchParams.destination?.name}</div>
                             </div>
                           </div>
                           
@@ -187,8 +172,8 @@ export function FareSearchResults({ searchParams, onSearchParamsChange }: FareSe
                               <div className="text-lg font-semibold text-gray-900">
                                 {format(new Date(option.return.departureDate), 'HH:mm')}
                               </div>
-                              <div className="text-sm text-gray-600">{searchParams.destination.code}</div>
-                              <div className="text-xs text-gray-500">{searchParams.destination.name}</div>
+                              <div className="text-sm text-gray-600">{searchParams.destination?.code}</div>
+                              <div className="text-xs text-gray-500">{searchParams.destination?.name}</div>
                             </div>
                             
                             <div className="flex-1 px-4">
@@ -206,8 +191,8 @@ export function FareSearchResults({ searchParams, onSearchParamsChange }: FareSe
                               <div className="text-lg font-semibold text-gray-900">
                                 {format(new Date(option.return.arrivalDate), 'HH:mm')}
                               </div>
-                              <div className="text-sm text-gray-600">{searchParams.origin.code}</div>
-                              <div className="text-xs text-gray-500">{searchParams.origin.name}</div>
+                              <div className="text-sm text-gray-600">{searchParams.origin?.code}</div>
+                              <div className="text-xs text-gray-500">{searchParams.origin?.name}</div>
                             </div>
                           </div>
                           
@@ -240,7 +225,7 @@ export function FareSearchResults({ searchParams, onSearchParamsChange }: FareSe
                   // Find alternative dates with available fares
                   const availableFares = fareData.outbound.fares
                     .filter(fare => !fare.unavailable && fare.price)
-                    .sort((a, b) => a.price.value - b.price.value)
+                    .sort((a, b) => (a.price?.value || 0) - (b.price?.value || 0))
                     .slice(0, 3); // Show top 3 alternatives
 
                   return (
@@ -296,8 +281,8 @@ export function FareSearchResults({ searchParams, onSearchParamsChange }: FareSe
                   );
                 }
                 
-                // Use selected date fare if available, otherwise fallback to minFare for round-trip
-                const displayFare = selectedFare || (searchParams.tripType === 'round-trip' ? fareData.outbound.minFare : null);
+                // Use selected date fare if available, otherwise fallback to minFare for one-way
+                const displayFare = selectedFare || (searchParams.tripType === 'one-way' ? fareData.outbound.minFare : null);
                 
                 if (!displayFare) {
                   return null; // This shouldn't happen but just in case
@@ -412,100 +397,41 @@ export function FareSearchResults({ searchParams, onSearchParamsChange }: FareSe
         </CardContent>
       </Card>
 
-      {/* Price Calendar */}
-      {showPriceCalendar && (
-        <Card>
-          <CardHeader>
-            <h3 className="text-lg font-semibold text-gray-900">Price Calendar</h3>
-            <p className="text-sm text-gray-600">
-              Click on a date to update your search
-            </p>
-          </CardHeader>
-          <CardContent>
-            {calendarLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-500"></div>
-                <span className="ml-2 text-gray-600">Loading price calendar...</span>
-              </div>
-            ) : priceCalendarData && priceCalendarData.length > 0 ? (
-              <PriceCalendar 
-                data={priceCalendarData}
-                selectedDate={searchParams.departureDate}
-                onDateSelect={(date) => {
-                  onSearchParamsChange({
-                    ...searchParams,
-                    departureDate: date
-                  });
-                }}
-              />
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-gray-500">No pricing data available for the selected route</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-    </div>
-  );
-}
+      {/* Find Cheaper Dates Button */}
+      <Card>
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-medium text-gray-900">Looking for better prices?</h3>
+              <p className="text-sm text-gray-600">Compare prices across multiple days</p>
+            </div>
+            <Button
+              onClick={() => setShowCalendarModal(true)}
+              variant="outline"
+              className="flex items-center space-x-2"
+            >
+              <CalendarDaysIcon className="w-4 h-4" />
+              <span>View Price Calendar</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
-// Price Calendar Component
-interface PriceCalendarProps {
-  data: Array<{ date: string; price: { value: number; currencyCode: string }; available: boolean }>;
-  selectedDate: Date | null;
-  onDateSelect: (date: Date) => void;
-}
-
-function PriceCalendar({ data, selectedDate, onDateSelect }: PriceCalendarProps) {
-  const today = new Date();
-  const startDate = new Date(data[0]?.date);
-  const endDate = new Date(data[data.length - 1]?.date);
-  
-  const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
-  
-  const getPriceForDate = (date: Date) => {
-    return data.find(item => isSameDay(new Date(item.date), date));
-  };
-
-  return (
-    <div className="grid grid-cols-7 gap-1">
-      {/* Day headers */}
-      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-        <div key={day} className="text-center text-sm font-medium text-gray-500 py-2">
-          {day}
-        </div>
-      ))}
-      
-      {/* Calendar days */}
-      {calendarDays.map(date => {
-        const priceData = getPriceForDate(date);
-        const isSelected = selectedDate && isSameDay(date, selectedDate);
-        const isPast = isBefore(date, today);
-        const isAvailable = priceData?.available && !isPast;
-        
-        return (
-          <button
-            key={date.toISOString()}
-            onClick={() => isAvailable && onDateSelect(date)}
-            disabled={!isAvailable}
-            className={cn(
-              'p-2 text-xs rounded border transition-colors',
-              isPast && 'text-gray-300 cursor-not-allowed',
-              isSelected && 'bg-primary-500 text-white border-primary-500',
-              !isSelected && isAvailable && 'hover:bg-primary-50 border-gray-200',
-              !isSelected && !isAvailable && 'text-gray-400 border-gray-100 cursor-not-allowed'
-            )}
-          >
-            <div className="font-medium">{format(date, 'd')}</div>
-            {priceData && isAvailable && (
-              <div className="text-xs mt-1">
-                {formatPrice(priceData.price)}
-              </div>
-            )}
-          </button>
-        );
-      })}
+      {/* Daily Fares Calendar Modal */}
+      <DailyFaresCalendarModal
+        isOpen={showCalendarModal}
+        onClose={() => setShowCalendarModal(false)}
+        origin={searchParams.origin}
+        destination={searchParams.destination}
+        selectedDate={searchParams.departureDate}
+        currency={searchParams.currency}
+        onDateSelect={(date) => {
+          onSearchParamsChange({
+            ...searchParams,
+            departureDate: date
+          });
+        }}
+      />
     </div>
   );
 }
